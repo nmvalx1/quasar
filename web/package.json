@@ -1,0 +1,12 @@
+{
+  "name": "@quasar/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@quasar/shared": "file:../shared"
+  }
+}

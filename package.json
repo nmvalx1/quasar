@@ -1,0 +1,23 @@
+{
+  "name": "quasar",
+  "private": true,
+  "version": "0.0.0",
+  "description": "QUASAR monorepo — Chrome extension, backend API, web app, shared types",
+  "workspaces": [
+    "extension",
+    "backend",
+    "web",
+    "shared"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:backend": "npm run dev -w @quasar/backend"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,42 @@
+# QUASAR — локальные сервисы для разработки.
+# Запуск: из корня репозитория: docker compose up -d
+# Порты: PostgreSQL 5432, Redis 6379 (см. backend/.env.example для DATABASE_URL / REDIS_URL)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: quasar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quasar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quasar}
+      POSTGRES_DB: ${POSTGRES_DB:-quasar}
+    # Host 5437 → контейнер 5432 (PostgreSQL внутри образа всегда слушает 5432)
+    ports:
+      - "${POSTGRES_PORT:-5437}:5432"
+    volumes:
+      - quasar_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quasar} -d ${POSTGRES_DB:-quasar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: quasar-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - quasar_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  quasar_postgres_data:
+  quasar_redis_data:

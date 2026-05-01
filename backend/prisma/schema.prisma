@@ -1,0 +1,270 @@
+// QUASAR — доменные таблицы (PostgreSQL). Имена таблиц: snake_case.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserPlan {
+  free
+  pro
+  team
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+  trialing
+  incomplete
+  unpaid
+  paused
+}
+
+enum PaymentProvider {
+  none
+  yookassa
+  stripe
+}
+
+enum Severity {
+  critical
+  high
+  medium
+  low
+}
+
+/// Запись Session Recorder (не HTTP-сессия).
+enum SessionStatus {
+  recording
+  paused
+  completed
+  failed
+}
+
+enum IntegrationProvider {
+  jira
+  youtrack
+  linear
+  notion
+  github
+  slack
+  telegram
+}
+
+enum TeamMemberRole {
+  owner
+  admin
+  member
+}
+
+/// События для дневных лимитов и аудита.
+enum UsageAction {
+  bug_report
+  qa_session
+  network_profile
+  snippet
+  integration_call
+  other
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  /// Текущий эффективный план (дублирует активную подписку для быстрых чтений).
+  plan         UserPlan @default(free)
+  passwordHash String?  @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  bugReports        BugReport[]
+  networkProfiles   NetworkProfile[]
+  sessions          Session[]
+  snippets          Snippet[]
+  integrations      Integration[]
+  refreshTokens     RefreshToken[]
+  subscriptions     Subscription[]
+  teamMemberships   TeamMember[]
+  usageLogs         UsageLog[]
+
+  @@map("users")
+}
+
+/// Подписка и биллинг (период, внешний id с ЮКасса/Stripe).
+model Subscription {
+  id                 String              @id @default(uuid())
+  userId             String              @map("user_id")
+  plan               UserPlan
+  status             SubscriptionStatus
+  /// Начало текущего расчётного периода.
+  currentPeriodStart DateTime            @map("current_period_start")
+  /// Конец периода; для Free может быть null или далёкая дата — решает use-case.
+  currentPeriodEnd   DateTime?           @map("current_period_end")
+  paymentProvider    PaymentProvider     @default(none) @map("payment_provider")
+  externalId         String?             @map("external_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([status])
+  @@index([externalId])
+  @@map("subscriptions")
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members TeamMember[]
+
+  @@index([name])
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String         @id @default(uuid())
+  teamId    String         @map("team_id")
+  userId    String         @map("user_id")
+  role      TeamMemberRole @default(member)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId])
+  @@index([userId, role])
+  @@map("team_members")
+}
+
+model BugReport {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  title                String
+  description          String   @db.Text
+  severity             Severity
+  pageUrl              String   @map("page_url")
+  environmentSummary   String?  @map("environment_summary") @db.Text
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("bug_reports")
+}
+
+model NetworkProfile {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  name         String
+  filterConfig Json     @map("filter_config")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, name])
+  @@map("network_profiles")
+}
+
+/// Записанная QA-сессия (Session Recorder).
+model Session {
+  id              String        @id @default(uuid())
+  userId          String        @map("user_id")
+  title           String
+  status          SessionStatus
+  startedAt       DateTime      @map("started_at")
+  endedAt         DateTime?     @map("ended_at")
+  durationSeconds Int?          @map("duration_seconds")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, startedAt])
+  @@index([status])
+  @@map("sessions")
+}
+
+model Snippet {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  content   String   @db.Text
+  shortcut  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, title])
+  @@map("snippets")
+}
+
+model Integration {
+  id              String              @id @default(uuid())
+  userId          String              @map("user_id")
+  provider        IntegrationProvider
+  label           String
+  connected       Boolean             @default(false)
+  /// Зашифрованные учётные данные (AES-256 на сервере).
+  encryptedSecret Bytes?            @map("encrypted_secret")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider])
+  @@map("integrations")
+}
+
+/// Учёт событий для лимитов (дневные квоты) и аналитики.
+model UsageLog {
+  id         String      @id @default(uuid())
+  userId     String      @map("user_id")
+  action     UsageAction
+  count      Int         @default(1)
+  /// Календарный день (UTC) для агрегации «за сегодня».
+  usageDate  DateTime    @map("usage_date") @db.Date
+  metadata   Json?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, action, usageDate])
+  @@index([userId, usageDate])
+  @@index([usageDate])
+  @@map("usage_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
