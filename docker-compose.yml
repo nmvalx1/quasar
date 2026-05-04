@@ -1,6 +1,8 @@
-# QUASAR — локальные сервисы для разработки.
-# Запуск: из корня репозитория: docker compose up -d
-# Порты: PostgreSQL 5432, Redis 6379 (см. backend/.env.example для DATABASE_URL / REDIS_URL)
+# QUASAR — локальные сервисы для разработки (см. .cursor/rules/quasar-context.mdc).
+# Секреты и учётные данные БД — только из переменных окружения (файл .env в корне репозитория
+# рядом с этим файлом, либо экспорт в оболочке). Значения по умолчанию согласованы с backend/.env.example.
+#
+# Запуск из корня: docker compose up -d
 
 services:
   postgres:
@@ -11,7 +13,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-quasar}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quasar}
       POSTGRES_DB: ${POSTGRES_DB:-quasar}
-    # Host 5437 → контейнер 5432 (PostgreSQL внутри образа всегда слушает 5432)
     ports:
       - "${POSTGRES_PORT:-5437}:5432"
     volumes:
